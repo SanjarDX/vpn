@@ -29,7 +29,7 @@ DOWNLOAD_LINKS = {
 }
 
 # Welcome message text
-WELCOME_MESSAGE = f"""**{BOT_DESCRIPTION}**
+WELCOME_MESSAGE = f"""<b>{BOT_DESCRIPTION}</b>
 
 Мы обеспечиваем защиту ваших данных, предоставляя надёжный и эффективный сервис VPN для безопасного и анонимного пользования интернетом. Ваши данные под защитой, а вы — в безопасности."""
 
@@ -156,6 +156,10 @@ def get_time_periods_menu(country_id: str) -> InlineKeyboardMarkup:
     month_12_original = base_price * 12
     month_12_discounted = int(month_12_original * 0.8)  # 20% discount
     
+    # Create strikethrough text using Unicode combining character
+    def add_strikethrough(text):
+        return ''.join(c + '\u0336' for c in str(text))
+    
     buttons = [
         [InlineKeyboardButton(
             text=f"1 месяц — {month_1} ₽", 
@@ -166,11 +170,11 @@ def get_time_periods_menu(country_id: str) -> InlineKeyboardMarkup:
             callback_data=f"period_{country_id}_3_{month_3}"
         )],
         [InlineKeyboardButton(
-            text=f"6 месяцев (-10%) — {month_6_original}-{month_6_discounted} ₽", 
+            text=f"6 месяцев (-10%) — {add_strikethrough(month_6_original)}-{month_6_discounted} ₽", 
             callback_data=f"period_{country_id}_6_{month_6_discounted}"
         )],
         [InlineKeyboardButton(
-            text=f"12 месяцев (-20%) — {month_12_original}-{month_12_discounted} ₽", 
+            text=f"12 месяцев (-20%) — {add_strikethrough(month_12_original)}-{month_12_discounted} ₽", 
             callback_data=f"period_{country_id}_12_{month_12_discounted}"
         )],
         [InlineKeyboardButton(
@@ -431,7 +435,7 @@ async def cmd_start(message: types.Message):
     await message.answer(
         WELCOME_MESSAGE,
         reply_markup=get_main_menu(),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @dp.callback_query()
@@ -442,9 +446,9 @@ async def handle_callback(callback: types.CallbackQuery):
     if callback.data == "tariffs":
         # Show tariffs menu
         await callback.message.edit_text(
-            "🌐 Выберите расположение сервера:\n\n⁉️ [Как выбрать тариф?](https://telegra.ph/Kak-vybrat-tarif-08-20)",
+            "<b>🌐 Выберите расположение сервера:</b>\n\n⁉️ <a href=\"https://telegra.ph/Kak-vybrat-tarif-08-20\">Как выбрать тариф?</a>",
             reply_markup=get_tariffs_menu(),
-            parse_mode="Markdown",
+            parse_mode="HTML",
             disable_web_page_preview=True
         )
     
@@ -453,15 +457,15 @@ async def handle_callback(callback: types.CallbackQuery):
         await callback.message.edit_text(
             WELCOME_MESSAGE,
             reply_markup=get_main_menu(),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     
     elif callback.data == "back_to_tariffs":
         # Return to tariffs menu
         await callback.message.edit_text(
-            "🌐 Выберите расположение сервера:\n\n⁉️ [Как выбрать тариф?](https://telegra.ph/Kak-vybrat-tarif-08-20)",
+            "<b>🌐 Выберите расположение сервера:</b>\n\n⁉️ <a href=\"https://telegra.ph/Kak-vybrat-tarif-20\">Как выбрать тариф?</a>",
             reply_markup=get_tariffs_menu(),
-            parse_mode="Markdown",
+            parse_mode="HTML",
             disable_web_page_preview=True
         )
     
@@ -484,53 +488,57 @@ async def handle_callback(callback: types.CallbackQuery):
     elif callback.data == "instructions_android":
         # Show Android instructions
         await callback.message.edit_text(
-            "📱 **Инструкция для Android:**\n\n"
-            "1. **Скачайте приложение [V2RayTun](https://play.google.com/store/apps/details?id=com.v2raytun.android) из Google Play.**\n"
-            "2. **Скопируйте ключ подписки в буфер обмена.**\n"
-            "3. **Откройте приложение [V2RayTun](https://play.google.com/store/apps/details?id=com.v2raytun.android), разрешите доступ к сетям при необходимости.**\n"
-            "4. **Добавьте профиль, нажав плюсик в правом верхнем углу приложения. Далее нажмите \"Добавить из буфера обмена\". Профиль появится в приложении.**\n"
-            "5. **Для подключения к профилю vpn нажмите по центру экрана.**",
+            "<b>📱 Инструкция для Android:</b>\n\n"
+            "1. Скачайте приложение <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">V2RayTun</a> из Google Play.\n"
+            "2. Скопируйте ключ подписки в буфер обмена.\n"
+            "3. Откройте приложение <a href=\"https://play.google.com/store/apps/details?id=com.v2raytun.android\">V2RayTun</a>, разрешите доступ к сетям при необходимости.\n"
+            "4. Добавьте профиль, нажав плюсик в правом верхнем углу приложения. Далее нажмите \"Добавить из буфера обмена\". Профиль появится в приложении.\n"
+            "5. Для подключения к профилю vpn нажмите по центру экрана.",
             reply_markup=get_android_instructions(),
-            parse_mode="Markdown"
+            parse_mode="HTML",
+            disable_web_page_preview=True
         )
     
     elif callback.data == "instructions_windows":
         # Show Windows instructions
         await callback.message.edit_text(
-            "💻 **Инструкция для Windows:**\n\n"
-            "1. **Скачайте и установите приложение [V2RayTun](https://storage.v2raytun.com/v2RayTun_Setup.exe).**\n"
-            "2. **Скопируйте ключ подписки в буфер обмена.**\n"
-            "3. **Откройте приложение [V2RayTun](https://storage.v2raytun.com/v2RayTun_Setup.exe), разрешите доступ от имени администратора при необходимости.**\n"
-            "4. **Добавьте профиль, нажав плюсик в правом верхнем углу приложения. Далее нажмите \"Добавить из буфера обмена\". Профиль появится в приложении.**\n"
-            "5. **Для подключения к профилю vpn нажмите по центру экрана.**",
+            "<b>💻 Инструкция для Windows:</b>\n\n"
+            "1. Скачайте и установите приложение <a href=\"https://storage.v2raytun.com/v2RayTun_Setup.exe\">V2RayTun</a>.\n"
+            "2. Скопируйте ключ подписки в буфер обмена.\n"
+            "3. Откройте приложение <a href=\"https://storage.v2raytun.com/v2RayTun_Setup.exe\">V2RayTun</a>, разрешите доступ от имени администратора при необходимости.\n"
+            "4. Добавьте профиль, нажав плюсик в правом верхнем углу приложения. Далее нажмите \"Добавить из буфера обмена\". Профиль появится в приложении.\n"
+            "5. Для подключения к профилю vpn нажмите по центру экрана.",
             reply_markup=get_windows_instructions(),
-            parse_mode="Markdown"
+            parse_mode="HTML",
+            disable_web_page_preview=True
         )
     
     elif callback.data == "instructions_iphone":
         # Show iPhone instructions
         await callback.message.edit_text(
-            "🍎 **Инструкция для Iphone:**\n\n"
-            "1. **Скачайте приложение [v2RayTun](https://apps.apple.com/ru/app/v2raytun/id6476628951?platform=iphone) либо [Streisand](https://apps.apple.com/app/id6450534064) из App Store.**\n"
-            "2. **Скопируйте ключ подписки в буфер обмена.**\n"
-            "3. **Запустите приложение, нажмите плюсик -> \"Добавить из буфера\".**\n"
-            "4. **Разрешите вставку ключ-ссылки из буфера.**\n"
-            "5. **Профиль появится в нижней части экрана, нажмите на него и запустите.**",
+            "<b>🍎 Инструкция для Iphone:</b>\n\n"
+            "1. Скачайте приложение <a href=\"https://apps.apple.com/ru/app/v2raytun/id6476628951?platform=iphone\">v2RayTun</a> либо <a href=\"https://apps.apple.com/app/id6450534064\">Streisand</a> из App Store.\n"
+            "2. Скопируйте ключ подписки в буфер обмена.\n"
+            "3. Запустите приложение, нажмите плюсик -> \"Добавить из буфера\".\n"
+            "4. Разрешите вставку ключ-ссылки из буфера.\n"
+            "5. Профиль появится в нижней части экрана, нажмите на него и запустите.",
             reply_markup=get_iphone_instructions(),
-            parse_mode="Markdown"
+            parse_mode="HTML",
+            disable_web_page_preview=True
         )
     
     elif callback.data == "instructions_mac":
         # Show Mac instructions
         await callback.message.edit_text(
-            "🍏 **Инструкция для Mac:**\n\n"
-            "1. **Скачайте и установите приложение [V2RayTun](https://apps.apple.com/en/app/v2raytun/id6476628951) из App Store.**\n"
-            "2. **Скопируйте ключ подписки в буфер обмена.**\n"
-            "3. **Откройте приложение [V2RayTun](https://apps.apple.com/en/app/v2raytun/id6476628951).**\n"
-            "4. **Добавьте профиль, нажав плюсик в правом верхнем углу приложения. Далее нажмите \"Добавить из буфера обмена\". Профиль появится в приложении.**\n"
-            "5. **Для подключения к профилю vpn нажмите по центру экрана.**",
+            "<b>🍏 Инструкция для Mac:</b>\n\n"
+            "1. Скачайте и установите приложение <a href=\"https://apps.apple.com/en/app/v2raytun/id6476628951\">V2RayTun</a> из App Store.\n"
+            "2. Скопируйте ключ подписки в буфер обмена.\n"
+            "3. Откройте приложение <a href=\"https://apps.apple.com/en/app/v2raytun/id6476628951\">V2RayTun</a>.\n"
+            "4. Добавьте профиль, нажав плюсик в правом верхнем углу приложения. Далее нажмите \"Добавить из буфера обмена\". Профиль появится в приложении.\n"
+            "5. Для подключения к профилю vpn нажмите по центру экрана.",
             reply_markup=get_mac_instructions(),
-            parse_mode="Markdown"
+            parse_mode="HTML",
+            disable_web_page_preview=True
         )
     
     elif callback.data == "help":
@@ -670,12 +678,12 @@ async def handle_callback(callback: types.CallbackQuery):
         
         # Show time periods for selected country
         await callback.message.edit_text(
-            f"**Тариф: {tariff_data['icon']} {tariff_data['name']} {tariff_data.get('services', '')}**\n\n"
-            f"💰 **Стоимость: {tariff_data['price']} ₽ | Месяц**\n\n"
-            f"При оплате на 6 месяцев — скидка 10%\n"
-            f"При оплате на 12 месяцев — скидка 20%",
+            f"<b>Тариф: {tariff_data['icon']} {tariff_data['name']} {tariff_data.get('services', '')}</b>\n\n"
+            f"💰 Стоимость: <b>{tariff_data['price']} ₽</b> | Месяц\n\n"
+            f"При оплате на 6 месяцев — <b>скидка 10%</b>\n"
+            f"При оплате на 12 месяцев — <b>скидка 20%</b>",
             reply_markup=get_time_periods_menu(country_id),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     
     elif callback.data.startswith("period_"):
@@ -690,12 +698,12 @@ async def handle_callback(callback: types.CallbackQuery):
         
         # Show payment methods
         await callback.message.edit_text(
-            f"**Тариф: {tariff_data['icon']} {tariff_data['name']} {tariff_data.get('services', '')}**\n\n"
-            f"**Период: {period_text}**\n\n"
-            f"**Стоимость: {price} ₽**\n\n"
-            "**Выберите метод оплаты:**",
+            f"<b>Тариф:</b> {tariff_data['icon']} {tariff_data['name']} {tariff_data.get('services', '')}\n\n"
+            f"<b>Период:</b> {period_text}\n\n"
+            f"<b>Стоимость:</b> {price} ₽\n\n"
+            "<b>Выберите метод оплаты:</b>",
             reply_markup=get_payment_methods_menu(country_id, period, price),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     
     elif callback.data.startswith("payment_"):
@@ -708,10 +716,10 @@ async def handle_callback(callback: types.CallbackQuery):
         
         # Show payment bill
         await callback.message.edit_text(
-            f"💰 **Счёт на оплату: {price}₽**\n\n"
-            f"⏳ **Время на оплату: ~30 минут.**",
+            f"💰 Счёт на оплату: <b>{price}₽</b>\n\n"
+            f"⏳ Время на оплату: ~30 минут.",
             reply_markup=get_payment_bill(country_id, period, price),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     
     elif callback.data.startswith("back_to_periods_"):
@@ -720,12 +728,12 @@ async def handle_callback(callback: types.CallbackQuery):
         tariff_data = TARIFFS[country_id]
         
         await callback.message.edit_text(
-            f"**Тариф: {tariff_data['icon']} {tariff_data['name']} {tariff_data.get('services', '')}**\n\n"
-            f"💰 **Стоимость: {tariff_data['price']} ₽ | Месяц**\n\n"
-            f"При оплате на 6 месяцев — скидка 10%\n"
-            f"При оплате на 12 месяцев — скидка 20%",
+            f"<b>Тариф: {tariff_data['icon']} {tariff_data['name']} {tariff_data.get('services', '')}</b>\n\n"
+            f"💰 Стоимость: <b>{tariff_data['price']} ₽</b> | Месяц\n\n"
+            f"При оплате на 6 месяцев — <b>скидка 10%</b>\n"
+            f"При оплате на 12 месяцев — <b>скидка 20%</b>",
             reply_markup=get_time_periods_menu(country_id),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     
     elif callback.data.startswith("back_to_payment_"):
@@ -739,12 +747,12 @@ async def handle_callback(callback: types.CallbackQuery):
         period_text = f"{period} мес." if period != "1" else "1 мес."
         
         await callback.message.edit_text(
-            f"**Тариф: {tariff_data['icon']} {tariff_data['name']} {tariff_data.get('services', '')}**\n\n"
-            f"**Период: {period_text}**\n\n"
-            f"**Стоимость: {price} ₽**\n\n"
-            "**Выберите метод оплаты:**",
+            f"<b>Тариф:</b> {tariff_data['icon']} {tariff_data['name']} {tariff_data.get('services', '')}\n\n"
+            f"<b>Период:</b> {period_text}\n\n"
+            f"<b>Стоимость:</b> {price} ₽\n\n"
+            "<b>Выберите метод оплаты:</b>",
             reply_markup=get_payment_methods_menu(country_id, period, price),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     
     elif callback.data.startswith("pay_sbp_"):
