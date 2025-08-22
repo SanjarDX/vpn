@@ -20,6 +20,12 @@ vpn_service = VPNService()
 # Store user VPN keys (user_id -> list of VPN subscription objects)
 user_vpn_keys = {}
 
+# Store referral relationships (referrer_id -> list of referred_user_ids)
+referral_relationships = {}
+
+# Store referral rewards (referrer_id -> list of reward objects)
+referral_rewards = {}
+
 # Counter for generating subscription numbers
 subscription_counter = 1
 
@@ -386,7 +392,7 @@ def get_partners_menu(user_id: int) -> InlineKeyboardMarkup:
     """Create the partners menu"""
     
     # Generate referral link with user ID
-    bot_username = "TunnelFoxRobot"  # You can change this to your bot username
+    bot_username = "oweiurbot"  # Bot username
     referral_link = f"https://t.me/{bot_username}?start=cl{user_id}"
     
     buttons = [
@@ -439,9 +445,63 @@ def generate_user_id() -> int:
     # Generate a 10-digit random number
     return random.randint(1000000000, 9999999999)
 
+async def send_referral_notification(referrer_id: int, referred_user_id: int):
+    """Send referral notification to referrer when referral makes a purchase"""
+    try:
+        # Create referral notification message in the style from the screenshot
+        notification_text = (
+            f"🎉 <b>Поздравляем! Ваш друг купил VPN</b>\n\n"
+            f"Ваш реферал (ID: {referred_user_id}) только что оформил подписку!\n\n"
+            f"🎁 <b>Ваша награда:</b> 7 дней бесплатного VPN в Германии\n\n"
+            f"Нажмите кнопку ниже, чтобы активировать награду!"
+        )
+        
+        # Create inline button similar to the screenshot style
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="🎁 Активировать 7 дней бесплатно",
+                callback_data=f"activate_referral_reward_{referrer_id}_{referred_user_id}"
+            )]
+        ])
+        
+        # Send notification to referrer
+        await bot.send_message(
+            chat_id=referrer_id,
+            text=notification_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+        logging.info(f"Sent referral notification to {referrer_id} for referral {referred_user_id}")
+        
+    except Exception as e:
+        logging.error(f"Error sending referral notification: {e}")
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    """Handle /start command"""
+    """Handle /start command with referral tracking"""
+    user_id = message.from_user.id
+    
+    # Check if this is a referral start
+    if message.text and message.text.startswith('/start '):
+        try:
+            # Extract referral code from start command
+            referral_code = message.text.split(' ')[1]
+            if referral_code.startswith('cl'):
+                referrer_id = int(referral_code[2:])
+                
+                # Store referral relationship
+                if referrer_id not in referral_relationships:
+                    referral_relationships[referrer_id] = []
+                
+                # Only add if not already referred and not self-referral
+                if user_id not in referral_relationships[referrer_id] and user_id != referrer_id:
+                    referral_relationships[referrer_id].append(user_id)
+                    logging.info(f"New referral: {user_id} referred by {referrer_id}")
+        except (ValueError, IndexError):
+            # Invalid referral code, ignore
+            pass
+    
     await message.answer(
         WELCOME_MESSAGE,
         reply_markup=get_main_menu(),
@@ -451,6 +511,7 @@ async def cmd_start(message: types.Message):
 @dp.callback_query()
 async def handle_callback(callback: types.CallbackQuery):
     """Handle button callbacks"""
+    global subscription_counter
     await callback.answer()
     
     if callback.data == "tariffs":
@@ -631,18 +692,23 @@ async def handle_callback(callback: types.CallbackQuery):
     
     elif callback.data == "partners":
         # Show partners menu
-        user_id = generate_user_id()
+        user_id = callback.from_user.id
+        
+        # Get referral statistics
+        referred_count = len(referral_relationships.get(user_id, []))
+        rewards_count = len(referral_rewards.get(user_id, []))
+        
         await callback.message.edit_text(
             f"<b>🤝 Партнерская программа</b>\n\n"
-            f"Вы будете получать <b>10%</b> от всех покупок ваших приглашенных друзей!\n\n"
+            f"🎁 <b>Ваша награда:</b> 7 дней бесплатного VPN в Германии за каждого реферала!\n\n"
             f"<b>Условие для начисления награды:</b>\n"
             f"1. Приглашенный человек ранее не пользовался ботом\n"
             f"2. Приглашенный человек оплатил подписку\n\n"
             f"<b>Ваша статистика:</b>\n"
-            f"👣 Вы пригласили: 0\n"
-            f"💰 Заработано: 0₽\n\n"
+            f"👣 Вы пригласили: {referred_count}\n"
+            f"🎁 Получено наград: {rewards_count}\n\n"
             f"<b>Ваша пригласительная ссылка:</b>\n"
-            f"🔗 <code>https://t.me/TunnelFoxRobot?start=cl{user_id}</code>\n\n"
+            f"🔗 <code>https://t.me/oweiurbot?start=cl{user_id}</code>\n\n"
             f"<i>Нажмите, чтобы скопировать</i>",
             reply_markup=get_partners_menu(user_id),
             parse_mode="HTML"
@@ -650,7 +716,7 @@ async def handle_callback(callback: types.CallbackQuery):
     
     elif callback.data == "my_account":
         # Show my account menu
-        user_id = generate_user_id()
+        user_id = callback.from_user.id
         await callback.message.edit_text(
             f"**Мой аккаунт**\n\n"
             f"🆔 **Ваш ID:** `{user_id}`\n"
@@ -670,7 +736,7 @@ async def handle_callback(callback: types.CallbackQuery):
     
     elif callback.data == "back_to_account":
         # Return to account menu
-        user_id = generate_user_id()
+        user_id = callback.from_user.id
         await callback.message.edit_text(
             f"**Мой аккаунт**\n\n"
             f"🆔 **Ваш ID:** `{user_id}`\n"
@@ -821,6 +887,24 @@ async def handle_callback(callback: types.CallbackQuery):
                     
                     user_vpn_keys[user_id].append(subscription_info)
                 
+                # Check if this user was referred by someone and send notification
+                for referrer_id, referred_users in referral_relationships.items():
+                    if user_id in referred_users:
+                        # Check if referrer already got reward for this user
+                        if referrer_id not in referral_rewards:
+                            referral_rewards[referrer_id] = []
+                        
+                        # Only send notification if this is the first purchase (no reward exists yet)
+                        reward_exists = any(
+                            reward.get("referred_user_id") == user_id 
+                            for reward in referral_rewards[referrer_id]
+                        )
+                        
+                        if not reward_exists:
+                            # Send referral notification to referrer
+                            await send_referral_notification(referrer_id, user_id)
+                        break
+                
                 # Format success message
                 key_message = vpn_service.format_user_key_message(
                     vpn_result, 
@@ -851,14 +935,16 @@ async def handle_callback(callback: types.CallbackQuery):
                     f"<b>Подписка №{subscription['subscription_number']} {subscription['tariff_name']}</b>\n"
                     f"⏰ Активна до: {expiry_str} | {subscription['price']} ₽\n\n"
                     f"🔑 <b>Ключ подписки:</b>\n"
-                    f"<pre><code>{subscription['subscription_url']}</code></pre>"
+                    f"<pre><code>{subscription['subscription_url']}</code></pre>\n\n"
+                                    f"📊 Использовано: {subscription.get('used_gb', 0)} ГБ\n"
+                f"⏱ Период: {subscription['period_months'] if subscription['period_months'] >= 1 else '7 дней' if subscription.get('is_referral_reward') else f'{subscription['period_months']} дней'}{' мес.' if subscription['period_months'] >= 1 else ''}"
                 )
                 
                 # Create action buttons in the exact layout from your screenshot
                 action_buttons = []
                 
                 # Top row: Single centered import button
-                import_url = f"https://import.vpn-club-service.ru/?url={subscription['subscription_url']}#TunnelFoxRobot"
+                import_url = f"https://import.vpn-club-service.ru/?url={subscription['subscription_url']}#oweiurbot"
                 action_buttons.append([
                     InlineKeyboardButton(
                         text="📋 Импорт в V2RayTun", 
@@ -975,14 +1061,14 @@ async def handle_callback(callback: types.CallbackQuery):
                 f"🔑 <b>Ключ подписки:</b>\n"
                 f"<pre><code>{subscription['subscription_url']}</code></pre>\n\n"
                 f"📊 Использовано: {subscription.get('used_gb', 0)} ГБ\n"
-                f"⏱ Период: {subscription['period_months']} мес."
+                f"⏱ Период: {subscription['period_months'] if subscription['period_months'] >= 1 else '7 дней' if subscription.get('is_referral_reward') else f'{subscription['period_months']} дней'}{' мес.' if subscription['period_months'] >= 1 else ''}"
             )
             
             # Create action buttons in the exact layout from your screenshot
             action_buttons = []
             
             # Top row: Single centered import button
-            import_url = f"https://import.vpn-club-service.ru/?url={subscription['subscription_url']}#TunnelFoxRobot"
+            import_url = f"https://import.vpn-club-service.ru/?url={subscription['subscription_url']}#oweiurbot"
             action_buttons.append([
                 InlineKeyboardButton(
                     text="📋 Импорт в V2RayTun", 
@@ -1060,6 +1146,144 @@ async def handle_callback(callback: types.CallbackQuery):
                         [InlineKeyboardButton(text="🔑 Мои ключи", callback_data="my_keys")]
                     ])
                 )
+    
+    elif callback.data.startswith("activate_referral_reward_"):
+        # Handle referral reward activation
+        
+        parts = callback.data.split("_")
+        referrer_id = int(parts[3])
+        referred_user_id = int(parts[4])
+        
+        # Verify this is the correct referrer
+        if callback.from_user.id != referrer_id:
+            await callback.answer("❌ Ошибка: это не ваша награда", show_alert=True)
+            return
+        
+        # Check if reward already exists
+        if referrer_id not in referral_rewards:
+            referral_rewards[referrer_id] = []
+        
+        # Check if this specific reward was already claimed
+        reward_exists = any(
+            reward.get("referred_user_id") == referred_user_id 
+            for reward in referral_rewards[referrer_id]
+        )
+        
+        if reward_exists:
+            await callback.answer("❌ Награда уже была получена за этого реферала", show_alert=True)
+            return
+        
+        # Show processing message
+        await callback.message.edit_text(
+            "⏳ <b>Активация награды...</b>\n\n"
+            "Создаем ваш бесплатный VPN ключ на 7 дней в Германии...",
+            parse_mode="HTML"
+        )
+        
+        try:
+            # Create 7-day free VPN in Germany for referrer
+            vpn_result = await vpn_service.create_vpn_user(
+                user_id=referrer_id,
+                country_id="germany",  # Always Germany for referral rewards
+                period_months=7/30  # 7 days (7/30 months)
+            )
+            
+            if vpn_result.get("success"):
+                # Store VPN subscription information
+                subscription_url = vpn_result.get("subscription_url", "")
+                if subscription_url:
+                    if referrer_id not in user_vpn_keys:
+                        user_vpn_keys[referrer_id] = []
+                    
+                    # Generate subscription number
+                    subscription_number = subscription_counter
+                    subscription_counter += 1
+                    
+                    # Calculate expiry date (7 days from now)
+                    from datetime import datetime, timedelta
+                    expiry_date = datetime.now() + timedelta(days=7)
+                     
+                     # Create subscription object for referral reward
+                    subscription_info = {
+                         "subscription_number": subscription_number,
+                         "subscription_url": subscription_url,
+                         "tariff_name": "🇩🇪 Германия (Реферальная награда)",
+                         "expiry_date": expiry_date,
+                         "price": 0,  # Free
+                         "period_months": 7/30,  # 7 days (7/30 months)
+                         "used_gb": 0,
+                         "status": "active",
+                         "is_referral_reward": True
+                     }
+                    
+                    user_vpn_keys[referrer_id].append(subscription_info)
+                
+                # Store referral reward record
+                reward_record = {
+                    "referred_user_id": referred_user_id,
+                    "reward_date": datetime.now(),
+                    "subscription_number": subscription_number,
+                    "subscription_url": subscription_url
+                }
+                referral_rewards[referrer_id].append(reward_record)
+                
+                # Show success message
+                await callback.message.edit_text(
+                    "✅ <b>Реферальная награда активирована!</b>\n\n"
+                    f"🎁 <b>Ваша награда:</b> 7 дней бесплатного VPN в Германии\n"
+                    f"🔑 <b>Ключ подписки:</b>\n"
+                    f"<pre><code>{subscription_url}</code></pre>\n\n"
+                    f"📱 Ключ добавлен в раздел «Мои ключи»\n"
+                    f"⏰ Активен до: {expiry_date.strftime('%d.%m.%y %H:%M')}",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        # First row: Single centered import button
+                        [InlineKeyboardButton(
+                            text="📋 Импорт в V2RayTun", 
+                            url=f"https://import.vpn-club-service.ru/?url={subscription_url}#oweiurbot"
+                        )],
+                        # Second row: Two buttons side by side
+                        [InlineKeyboardButton(
+                            text="📚 Инструкция", 
+                            callback_data="instructions"
+                        ),
+                        InlineKeyboardButton(
+                            text="🔑 Мои ключи", 
+                            callback_data="my_keys"
+                        )],
+                        # Third row: Single centered back button
+                        [InlineKeyboardButton(
+                            text="🏠 Главное меню", 
+                            callback_data="back_to_main"
+                        )]
+                    ])
+                )
+                
+                logging.info(f"Referral reward activated for {referrer_id} from referral {referred_user_id}")
+                
+            else:
+                # Handle creation error
+                await callback.message.edit_text(
+                    "❌ <b>Ошибка при активации награды</b>\n\n"
+                    "Произошла техническая ошибка. Пожалуйста, обратитесь в поддержку.",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="✉️ Написать в поддержку", url="https://t.me/DavirovDS")],
+                        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main")]
+                    ])
+                )
+                
+        except Exception as e:
+            logging.error(f"Error activating referral reward: {e}")
+            await callback.message.edit_text(
+                "❌ <b>Техническая ошибка</b>\n\n"
+                "Не удалось активировать награду. Обратитесь в поддержку.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✉️ Написать в поддержку", url="https://t.me/DavirovDS")],
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main")]
+                ])
+            )
 
 async def main():
     """Main function"""

@@ -109,14 +109,14 @@ class VPNService:
         # All countries will use the same inbound for now
         return ["VLESS TCP REALITY"]
     
-    async def create_vpn_user(self, user_id: int, country_id: str, period_months: int) -> Dict[str, Any]:
+    async def create_vpn_user(self, user_id: int, country_id: str, period_months: float) -> Dict[str, Any]:
         """Create a new VPN user in Marzban"""
         try:
             # Generate unique username
             username = self._generate_username(user_id, country_id)
             
             # Calculate expiry date
-            expire_days = period_months * 30  # Approximate days per month
+            expire_days = int(period_months * 30)  # Convert months to days
             expire_timestamp = int((datetime.now() + timedelta(days=expire_days)).timestamp())
             
             # Get inbounds for the selected country
