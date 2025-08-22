@@ -851,7 +851,7 @@ async def handle_callback(callback: types.CallbackQuery):
                     f"<b>Подписка №{subscription['subscription_number']} {subscription['tariff_name']}</b>\n"
                     f"⏰ Активна до: {expiry_str} | {subscription['price']} ₽\n\n"
                     f"🔑 <b>Ключ подписки:</b>\n"
-                    f"<code>{subscription['subscription_url']}</code>"
+                    f"<pre><code>{subscription['subscription_url']}</code></pre>"
                 )
                 
                 # Create action buttons in the exact layout from your screenshot
@@ -973,7 +973,7 @@ async def handle_callback(callback: types.CallbackQuery):
                 f"<b>Подписка №{subscription['subscription_number']} {subscription['tariff_name']}</b>\n"
                 f"Активна до: {expiry_str} | {subscription['price']}₽\n\n"
                 f"🔑 <b>Ключ подписки:</b>\n"
-                f"<code>{subscription['subscription_url']}</code>\n\n"
+                f"<pre><code>{subscription['subscription_url']}</code></pre>\n\n"
                 f"📊 Использовано: {subscription.get('used_gb', 0)} ГБ\n"
                 f"⏱ Период: {subscription['period_months']} мес."
             )

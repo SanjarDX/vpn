@@ -262,7 +262,7 @@ class VPNService:
 <b>Активен до:</b> {expiry_str}
 
 <b>🔑 Ваш ключ подписки:</b>
-<code>{subscription_url}</code>
+<pre><code>{subscription_url}</code></pre>
 
 <i>Нажмите на ключ, чтобы скопировать его</i>
 
