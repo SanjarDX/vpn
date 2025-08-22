@@ -1,2 +1,7 @@
-# Copy this file to .env and add your bot token
+# Copy this file to .env and add your configuration
 BOT_TOKEN=your_bot_token_here
+
+# Marzban Configuration
+MARZBAN_URL=
+MARZBAN_USERNAME=admin
+MARZBAN_PASSWORD=admin

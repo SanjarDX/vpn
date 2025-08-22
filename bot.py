@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import BOT_TOKEN, BOT_DESCRIPTION
+from vpn_service import VPNService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -12,6 +13,15 @@ logging.basicConfig(level=logging.INFO)
 # Initialize bot and dispatcher
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
+# Initialize VPN service
+vpn_service = VPNService()
+
+# Store user VPN keys (user_id -> list of VPN subscription objects)
+user_vpn_keys = {}
+
+# Counter for generating subscription numbers
+subscription_counter = 1
 
 # Bot ID constant
 BOT_ID = "8202650359"
@@ -755,11 +765,301 @@ async def handle_callback(callback: types.CallbackQuery):
         )
     
     elif callback.data.startswith("pay_sbp_"):
-        # Handle SBP payment (placeholder for now)
-        await callback.message.answer("🚀 Платеж через СБП будет интегрирован позже.")
+        # Handle SBP payment - simulate successful payment and create VPN key
+        parts = callback.data.split("_")
+        country_id = parts[2]
+        period = int(parts[3])
+        price = int(parts[4])
+        
+        # Get tariff and user info
+        tariff_data = TARIFFS[country_id]
+        user_id = callback.from_user.id
+        period_text = f"{period} мес." if period != 1 else "1 мес."
+        
+        # Show processing message
+        await callback.message.edit_text(
+            "⏳ <b>Обработка платежа...</b>\n\n"
+            "Создаем ваш VPN ключ, пожалуйста подождите...",
+            parse_mode="HTML"
+        )
+        
+        try:
+            # Create VPN user
+            vpn_result = await vpn_service.create_vpn_user(
+                user_id=user_id,
+                country_id=country_id,
+                period_months=period
+            )
+            
+            if vpn_result.get("success"):
+                # Store detailed VPN subscription information for this user
+                subscription_url = vpn_result.get("subscription_url", "")
+                if subscription_url:
+                    if user_id not in user_vpn_keys:
+                        user_vpn_keys[user_id] = []
+                    
+                    # Generate subscription number
+                    global subscription_counter
+                    subscription_number = subscription_counter
+                    subscription_counter += 1
+                    
+                    # Calculate expiry date
+                    from datetime import datetime, timedelta
+                    expiry_date = datetime.now() + timedelta(days=vpn_result.get("expire_days", 30))
+                    
+                    # Create subscription object
+                    subscription_info = {
+                        "subscription_number": subscription_number,
+                        "subscription_url": subscription_url,
+                        "tariff_name": f"{tariff_data['icon']} {tariff_data['name']}",
+                        "expiry_date": expiry_date,
+                        "price": price,
+                        "period_months": period,
+                        "used_gb": 0,  # Start with 0 GB used
+                        "status": "active" if expiry_date > datetime.now() else "expired"
+                    }
+                    
+                    user_vpn_keys[user_id].append(subscription_info)
+                
+                # Format success message
+                key_message = vpn_service.format_user_key_message(
+                    vpn_result, 
+                    f"{tariff_data['icon']} {tariff_data['name']}", 
+                    period_text
+                )
+                
+                # Redirect to subscription detail view instead of showing success message
+                await callback.message.edit_text(
+                    "✅ <b>VPN ключ успешно создан!</b>\n\n"
+                    "Перенаправляем вас к деталям подписки...",
+                    parse_mode="HTML"
+                )
+                
+                # Wait a moment and then show the subscription detail
+                import asyncio
+                await asyncio.sleep(1)
+                
+                # Show the subscription detail view
+                subscription_index = len(user_vpn_keys[user_id]) - 1  # Get the newly created subscription
+                subscription = user_vpn_keys[user_id][subscription_index]
+                
+                # Format expiry date
+                expiry_str = subscription["expiry_date"].strftime("%d.%m.%y %H:%M")
+                
+                # Create clean subscription view matching your exact format
+                subscription_text = (
+                    f"<b>Подписка №{subscription['subscription_number']} {subscription['tariff_name']}</b>\n"
+                    f"⏰ Активна до: {expiry_str} | {subscription['price']} ₽\n\n"
+                    f"🔑 <b>Ключ подписки:</b>\n"
+                    f"<code>{subscription['subscription_url']}</code>"
+                )
+                
+                # Create action buttons in the exact layout from your screenshot
+                action_buttons = []
+                
+                # Top row: Single centered import button
+                import_url = f"https://import.vpn-club-service.ru/?url={subscription['subscription_url']}#TunnelFoxRobot"
+                action_buttons.append([
+                    InlineKeyboardButton(
+                        text="📋 Импорт в V2RayTun", 
+                        url=import_url
+                    )
+                ])
+                
+                # Middle row: Two buttons side by side
+                action_buttons.append([
+                    InlineKeyboardButton(
+                        text="📚 Инструкция", 
+                        callback_data="instructions"
+                    ),
+                    InlineKeyboardButton(
+                        text="🔑 Мои ключи", 
+                        callback_data="my_keys"
+                    )
+                ])
+                
+                # Bottom row: Single centered back button
+                action_buttons.append([
+                    InlineKeyboardButton(text="🔙 Вернуться", callback_data="my_keys")
+                ])
+                
+                await callback.message.edit_text(
+                    subscription_text,
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=action_buttons)
+                )
+                
+                # Log successful creation
+                logging.info(f"VPN key created for user {user_id}, country {country_id}, period {period} months")
+                
+            else:
+                # Handle creation error
+                await callback.message.edit_text(
+                    "❌ <b>Ошибка при создании VPN ключа</b>\n\n"
+                    "Произошла техническая ошибка. Ваш платеж будет возвращен.\n"
+                    "Пожалуйста, обратитесь в поддержку.",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="✉️ Написать в поддержку", url="https://t.me/DavirovDS")],
+                        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main")]
+                    ])
+                )
+                
+        except Exception as e:
+            logging.error(f"Error creating VPN key: {e}")
+            await callback.message.edit_text(
+                "❌ <b>Техническая ошибка</b>\n\n"
+                "Не удалось создать VPN ключ. Обратитесь в поддержку.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✉️ Написать в поддержку", url="https://t.me/DavirovDS")],
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main")]
+                ])
+            )
     
     elif callback.data == "my_keys":
-        await callback.message.answer("🔑 Здесь будут показаны ваши VPN ключи.")
+        # Display user's VPN subscriptions in professional format
+        user_id = callback.from_user.id
+        if user_id in user_vpn_keys and user_vpn_keys[user_id]:
+            subscriptions = user_vpn_keys[user_id]
+            
+            # Create subscription list text
+            subscriptions_text = "<b>🔑 Список ваших подписок и ключей:</b>\n\n"
+            
+            # Create keyboard with subscription management buttons
+            keyboard_buttons = []
+            for i, sub in enumerate(subscriptions):
+                # Create button text with flag, country name, and subscription number
+                button_text = f"{sub['tariff_name']} #{sub['subscription_number']}"
+                keyboard_buttons.append([
+                    InlineKeyboardButton(
+                        text=button_text, 
+                        callback_data=f"subscription_{user_id}_{i}"
+                    )
+                ])
+            
+            keyboard_buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main")])
+            
+            await callback.message.edit_text(
+                subscriptions_text,
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+            )
+        else:
+            await callback.message.edit_text(
+                "<b>🔑 У вас пока нет VPN ключей</b>\n\n"
+                "Оформите подписку, чтобы получить VPN ключ!",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💎 Тарифы", callback_data="tariffs")],
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main")]
+                ])
+            )
+    
+    elif callback.data.startswith("subscription_"):
+        # Handle subscription detail view
+        parts = callback.data.split("_")
+        user_id = int(parts[1])
+        subscription_index = int(parts[2])
+        
+        if user_id in user_vpn_keys and subscription_index < len(user_vpn_keys[user_id]):
+            subscription = user_vpn_keys[user_id][subscription_index]
+            
+            # Format expiry date
+            expiry_str = subscription["expiry_date"].strftime("%d.%m.%y %H:%M")
+            
+            # Create detailed subscription view
+            subscription_text = (
+                f"<b>Подписка №{subscription['subscription_number']} {subscription['tariff_name']}</b>\n"
+                f"Активна до: {expiry_str} | {subscription['price']}₽\n\n"
+                f"🔑 <b>Ключ подписки:</b>\n"
+                f"<code>{subscription['subscription_url']}</code>\n\n"
+                f"📊 Использовано: {subscription.get('used_gb', 0)} ГБ\n"
+                f"⏱ Период: {subscription['period_months']} мес."
+            )
+            
+            # Create action buttons in the exact layout from your screenshot
+            action_buttons = []
+            
+            # Top row: Single centered import button
+            import_url = f"https://import.vpn-club-service.ru/?url={subscription['subscription_url']}#TunnelFoxRobot"
+            action_buttons.append([
+                InlineKeyboardButton(
+                    text="📋 Импорт в V2RayTun", 
+                    url=import_url
+                )
+            ])
+            
+            # Middle row: Two buttons side by side
+            action_buttons.append([
+                InlineKeyboardButton(
+                    text="📚 Инструкция", 
+                    callback_data="instructions"
+                ),
+                InlineKeyboardButton(
+                    text="🔑 Мои ключи", 
+                    callback_data="my_keys"
+                )
+            ])
+            
+            # Renew button - only show for expired subscriptions (centered)
+            if subscription["status"] == "expired":
+                action_buttons.append([
+                    InlineKeyboardButton(
+                        text="🔄 Продлить подписку", 
+                        callback_data=f"renew_{user_id}_{subscription_index}"
+                    )
+                ])
+            
+            # Bottom row: Single centered back button
+            action_buttons.append([
+                InlineKeyboardButton(text="🔙 Вернуться", callback_data="my_keys")
+            ])
+            
+            await callback.message.edit_text(
+                subscription_text,
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=action_buttons)
+            )
+    
+
+    
+    elif callback.data.startswith("renew_"):
+        # Handle subscription renewal
+        parts = callback.data.split("_")
+        user_id = int(parts[1])
+        subscription_index = int(parts[2])
+        
+        if user_id in user_vpn_keys and subscription_index < len(user_vpn_keys[user_id]):
+            subscription = user_vpn_keys[user_id][subscription_index]
+            
+            # Get tariff ID from tariff name
+            tariff_id = None
+            for tid, tariff_data in TARIFFS.items():
+                if tariff_data['name'] in subscription['tariff_name']:
+                    tariff_id = tid
+                    break
+            
+            if tariff_id:
+                # Show renewal options
+                await callback.message.edit_text(
+                    f"🔄 <b>Продление подписки</b>\n\n"
+                    f"Подписка: {subscription['tariff_name']} #{subscription['subscription_number']}\n"
+                    f"Текущая цена: {subscription['price']}₽\n\n"
+                    f"Выберите период продления:",
+                    parse_mode="HTML",
+                    reply_markup=get_time_periods_menu(tariff_id)
+                )
+            else:
+                await callback.message.edit_text(
+                    "❌ <b>Ошибка</b>\n\n"
+                    "Не удалось определить тариф для продления.",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="🔙 К подписке", callback_data=f"subscription_{user_id}_{subscription_index}")],
+                        [InlineKeyboardButton(text="🔑 Мои ключи", callback_data="my_keys")]
+                    ])
+                )
 
 async def main():
     """Main function"""
